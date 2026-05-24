@@ -21,10 +21,10 @@ st.set_page_config(
 # =========================================
 def conectar_db():
     DATABASE_URL = "postgresql://postgres:Aa1082867687_@db.tqgmapwcknhdydjkbdtj.supabase.co:5432/postgres"
-    # Quitamos la caché rígida para que valide la conexión en vivo y no use conexiones caídas
     return psycopg2.connect(DATABASE_URL)
 
 def inicializar_base_datos():
+    conn = None
     try:
         conn = conectar_db()
         cursor = conn.cursor()
@@ -70,13 +70,14 @@ def inicializar_base_datos():
         """)
         conn.commit()
         cursor.close()
-        conn.close()
     except Exception as e:
-        # Si hay un microcorte al iniciar, muestra un aviso elegante en vez de romperse
-        st.error("⚠️ Error de conexión temporal con el servidor de datos. Por favor, refresca la página.")
+        st.error(f"⚠️ Error crítico al inicializar base de datos: {e}")
         st.stop()
+    finally:
+        if conn:
+            conn.close()
 
-# Inicializamos las tablas directamente en internet
+# Inicializamos las tablas de forma limpia
 inicializar_base_datos()
 
 if "carrito" not in st.session_state:
@@ -99,7 +100,7 @@ st.markdown("""
 /* FORZAR COLOR OSCURO EN TEXTOS DE STREAMLIT, LABELS Y PARÁGRAFOS */
 .stApp p, .stApp label, .stApp span, .stApp div, [data-testid="stMarkdownContainer"] p {
     color: #1e293b !important;
-    font-weight: 500 !important;
+    font-weight: 600 !important;
 }
 
 /* TÍTULOS EN COLOR ROSADO COMPORTAMIENTO PREMIUM Y VISIBLE */
@@ -113,7 +114,7 @@ h1, h2, h3, h4, h5, h6, [data-testid="stMarkdownContainer"] h1, [data-testid="st
 input, select, textarea, div[data-baseweb="select"] {
     background-color: #ffffff !important;
     color: #1e293b !important;
-    border: 1px solid #f472b6 !important;
+    border: 2px solid #f472b6 !important;
     border-radius: 10px !important;
 }
 
@@ -157,7 +158,8 @@ section[data-testid="stSidebar"] * {
     box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.03);
 }
 [data-testid="stMetricLabel"] div {
-    color: #64748b !important;
+    color: #475569 !important;
+    font-weight: bold !important;
 }
 [data-testid="stMetricValue"] div {
     color: #9d174d !important;
@@ -170,15 +172,15 @@ section[data-testid="stSidebar"] * {
     padding: 22px;
     border-radius: 18px;
     margin-bottom: 20px;
-    border: 1px solid #fbcfe8;
-    box-shadow: 0px 6px 18px rgba(219, 39, 119, 0.03);
+    border: 2px solid #fbcfe8;
+    box-shadow: 0px 6px 18px rgba(219, 39, 119, 0.05);
 }
 .card h3 {
     color: #9d174d !important;
     margin-top: 0px;
 }
 .card p, .card b {
-    color: #334155 !important;
+    color: #0f172a !important;
 }
 
 .section-title {
@@ -212,6 +214,7 @@ if menu == "🏠 Inicio y Gráficos":
     st.subheader("Dashboard Gerencial Automatizado")
     st.markdown("---")
 
+    conn = None
     try:
         conn = conectar_db()
         cursor = conn.cursor()
@@ -239,7 +242,6 @@ if menu == "🏠 Inicio y Gráficos":
         """, conn)
 
         cursor.close()
-        conn.close()
 
         if not df_analisis.empty:
             df_analisis["Total Facturado ($)"] = df_analisis["total_facturado"].astype(float)
@@ -274,7 +276,10 @@ if menu == "🏠 Inicio y Gráficos":
             else:
                 st.info("Aún no se registran facturas con múltiples artículos variados.")
     except Exception as e:
-        st.warning("🔄 Conexión interrumpida momentáneamente. Por favor desliza hacia abajo para recargar la app.")
+        st.error(f"Error de sincronización en Inicio: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 # =========================================
 # 2. PANTALLA: AGREGAR PRODUCTO
@@ -302,6 +307,7 @@ elif menu == "➕ Agregar Producto":
                 precio_exacto = str(Decimal(str(precio_input)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
                 costo_exacto = str(Decimal(str(costo_input)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
                 
+                conn = None
                 with st.spinner("Sincronizando con catálogo en la nube..."):
                     try:
                         conn = conectar_db()
@@ -312,12 +318,14 @@ elif menu == "➕ Agregar Producto":
                         )
                         conn.commit()
                         cursor.close()
-                        conn.close()
                         st.success(f"✔ El producto '{nombre}' se ha guardado correctamente.")
                     except psycopg2.IntegrityError:
                         st.error(f"❌ Ya existe un artículo registrado con el nombre '{nombre}'.")
                     except Exception as e:
-                        st.error("❌ Falló el envío. Comprueba tu señal de internet e intenta de nuevo.")
+                        st.error(f"❌ Falló el envío: {e}")
+                    finally:
+                        if conn:
+                            conn.close()
 
 # =========================================
 # 3. PANTALLA: INVENTARIO
@@ -325,13 +333,13 @@ elif menu == "➕ Agregar Producto":
 elif menu == "📦 Inventario":
     st.title("📦 Almacén Físico y Control de Stock")
 
+    conn = None
     try:
         conn = conectar_db()
         cursor = conn.cursor()
         cursor.execute("SELECT nombre, categoria, precio, stock, costo_compra FROM inventario ORDER BY nombre ASC")
         productos = cursor.fetchall()
         cursor.close()
-        conn.close()
 
         if not productos:
             st.warning("El almacén está vacío.")
@@ -350,7 +358,10 @@ elif menu == "📦 Inventario":
                 </div>
                 ''', unsafe_allow_html=True)
     except Exception as e:
-        st.error("Error al cargar el inventario. Desliza para recargar.")
+        st.error(f"Error al cargar el inventario: {e}")
+    finally:
+        if conn:
+            conn.close()
 
 # =========================================
 # 4. PANTALLA: REGISTRAR VENTA (POS)
@@ -359,16 +370,19 @@ elif menu == "💰 Registrar Venta (POS)":
     st.title("💰 Terminal de Ventas y Facturación Múltiple")
     st.markdown("---")
 
+    conn = None
     try:
         conn = conectar_db()
         cursor = conn.cursor()
         cursor.execute("SELECT nombre, precio, stock, categoria, costo_compra FROM inventario WHERE stock > 0 ORDER BY nombre ASC")
         db_productos = cursor.fetchall()
         cursor.close()
-        conn.close()
     except Exception as e:
-        st.error("Error al consultar productos. Desliza para recargar.")
+        st.error(f"Error al consultar productos: {e}")
         db_productos = []
+    finally:
+        if conn:
+            conn.close()
 
     if db_productos:
         dict_productos = {p[0]: {"precio": Decimal(p[1]), "stock": int(p[2]), "categoria": p[3], "costo": Decimal(p[4])} for p in db_productos}
@@ -491,6 +505,7 @@ elif menu == "💰 Registrar Venta (POS)":
                         if c_nombre.strip() == "" or c_id.strip() == "":
                             st.error("❌ Los campos Nombre y Cédula son obligatorios.")
                         else:
+                            conn = None
                             with st.spinner("Procesando venta en la nube..."):
                                 try:
                                     conn = conectar_db()
@@ -498,8 +513,9 @@ elif menu == "💰 Registrar Venta (POS)":
                                     cod_soporte = f"FAC-{datetime.now().strftime('%d%H%M%S')}"
                                     ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                     
+                                    # EXACtAMENTE EN ORDEN: ciudad mapeada correctamente
                                     cursor.execute("""
-                                        INSERT INTO ventas_maestro (codigo_soporte, fecha_hora, cliente_nombre, cliente_id, direccion, telefono, city, responsable_iva, total_facturado)
+                                        INSERT INTO ventas_maestro (codigo_soporte, fecha_hora, cliente_nombre, cliente_id, direccion, telefono, ciudad, responsable_iva, total_facturado)
                                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                                     """, (cod_soporte, ahora, c_nombre.strip(), c_id.strip(), c_direccion.strip(), c_telefono.strip(), c_ciudad.strip(), c_iva, str(total_factura)))
                                     
@@ -513,13 +529,17 @@ elif menu == "💰 Registrar Venta (POS)":
                                     
                                     conn.commit()
                                     cursor.close()
-                                    conn.close()
                                     time.sleep(0.4)
                                     st.success(f"🎉 ¡Factura {cod_soporte} guardada!")
                                     st.session_state.carrito = []
                                     st.rerun()
                                 except Exception as e:
-                                    st.error(f"Error al registrar la venta. Inténtalo de nuevo.")
+                                    if conn:
+                                        conn.rollback()
+                                    st.error(f"Error crítico al registrar la venta: {e}")
+                                finally:
+                                    if conn:
+                                        conn.close()
 
 # =========================================
 # 5. PANTALLA: SOPORTE CONTABLE
@@ -528,6 +548,7 @@ elif menu == "📊 Soporte Contable":
     st.title("📊 Libro Mayor de Contabilidad e Ingresos")
     st.markdown("---")
 
+    conn = None
     try:
         conn = conectar_db()
         df_libros = pd.read_sql_query("""
@@ -544,10 +565,12 @@ elif menu == "📊 Soporte Contable":
             JOIN ventas_detalle d ON m.codigo_soporte = d.codigo_soporte
             ORDER BY m.fecha_hora DESC
         """, conn)
-        conn.close()
     except Exception as e:
-        st.error("Error al conectar con el reporte contable.")
+        st.error(f"Error al conectar con el reporte contable: {e}")
         df_libros = pd.DataFrame()
+    finally:
+        if conn:
+            conn.close()
 
     if df_libros.empty:
         st.info("No se registran movimientos comerciales.")
@@ -572,7 +595,8 @@ elif menu == "📊 Soporte Contable":
         st.dataframe(df_libros, use_container_width=True, hide_index=True)
         
         buffer_excel = io.BytesIO()
-        with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
+        # MODIFICADO: Usamos xlsxwriter que viene por defecto en pandas para evitar dependencias caídas
+        with pd.ExcelWriter(buffer_excel, engine='xlsxwriter') as writer:
             df_libros.to_excel(writer, index=False, sheet_name='Contabilidad_BriRodriguez')
         
         st.download_button(
@@ -589,17 +613,20 @@ elif menu == "⚙️ Panel Administrador":
     st.title("⚙️ Panel de Control Gerencial")
     st.markdown("---")
     
+    conn = None
     try:
         conn = conectar_db()
         cursor = conn.cursor()
         cursor.execute("SELECT id, nombre, categoria, precio, stock, costo_compra FROM inventario ORDER BY nombre ASC")
         lista_productos = cursor.fetchall()
     except Exception as e:
-        st.error("Error de base de datos.")
+        st.error(f"Error de base de datos: {e}")
         lista_productos = []
 
     if not lista_productos:
         st.info("No hay productos registrados.")
+        if conn:
+            conn.close()
     else:
         nombres_productos = [p[1] for p in lista_productos]
         producto_a_modificar = st.selectbox("Selecciona el producto que deseas gestionar:", nombres_productos)
@@ -626,9 +653,11 @@ elif menu == "⚙️ Panel Administrador":
                         )
                         conn.commit()
                         cursor.close()
-                        conn.close()
                         st.success("Cambios guardados con éxito.")
                         time.sleep(0.5)
                         st.rerun()
                     except Exception as e:
-                        st.error("No se pudieron guardar los cambios de forma remota.")
+                        st.error(f"No se pudieron guardar los cambios: {e}")
+                    finally:
+                        if conn:
+                            conn.close()
