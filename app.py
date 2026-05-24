@@ -1,7 +1,8 @@
 import streamlit as st
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
-import sqlite3
+import psycopg2  # Conector oficial para PostgreSQL en la nube
+from psycopg2.extras import DictCursor
 import pandas as pd
 import io
 import time
@@ -10,25 +11,27 @@ import time
 # CONFIGURACIÓN GENERAL
 # =========================================
 st.set_page_config(
-    page_title="💎 BISUTERIA BRI RODRIGUEZ JEWERLY",
+    page_title="💎 BIZUTERIA BRIRODRIGUEZ",
     page_icon="💍",
     layout="wide"
 )
 
 # =========================================
-# BASE DE DATOS LOCAL CON CACHÉ
+# CONEXIÓN EN LA NUBE CON CACHÉ (SUPABASE)
 # =========================================
 @st.cache_resource
 def conectar_db():
-    return sqlite3.connect("inventario_brirodriguez.db", check_same_thread=False)
+    DATABASE_URL = "postgresql://postgres:Aa1082867687_@db.tqgmapwcknhdydjkbdtj.supabase.co:5432/postgres"
+    return psycopg2.connect(DATABASE_URL)
 
 def inicializar_base_datos():
     conn = conectar_db()
     cursor = conn.cursor()
     
+    # Estructura optimizada para la nube (PostgreSQL)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS inventario (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             nombre TEXT UNIQUE,
             categoria TEXT,
             precio TEXT,
@@ -53,7 +56,7 @@ def inicializar_base_datos():
     
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ventas_detalle (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             codigo_soporte TEXT,
             producto TEXT,
             categoria TEXT,
@@ -61,75 +64,58 @@ def inicializar_base_datos():
             cantidad INTEGER,
             descuento_total TEXT,
             subtotal TEXT,
-            costo_total_historico TEXT DEFAULT '0.00',
-            FOREIGN KEY (codigo_soporte) REFERENCES ventas_maestro(codigo_soporte)
+            costo_total_historico TEXT DEFAULT '0.00'
         )
     """)
-    
-    try: cursor.execute("ALTER TABLE inventario ADD COLUMN costo_compra TEXT DEFAULT '0.00'")
-    except sqlite3.OperationalError: pass
-    try: cursor.execute("ALTER TABLE ventas_detalle ADD COLUMN descuento_total TEXT DEFAULT '0.00'")
-    except sqlite3.OperationalError: pass 
-    try: cursor.execute("ALTER TABLE ventas_detalle ADD COLUMN costo_total_historico TEXT DEFAULT '0.00'")
-    except sqlite3.OperationalError: pass 
-        
     conn.commit()
 
+# Inicializamos las tablas directamente en internet
 inicializar_base_datos()
 
 if "carrito" not in st.session_state:
     st.session_state.carrito = []
 
 # =========================================
-# CSS INTERACTIVO: ANIMACIONES Y ESTÉTICA SUTIL
+# CSS INTERACTIVO PREMIUM: MÁXIMO CONTRASTE
 # =========================================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&display=swap');
 
-/* EFECTO FADE-IN GENERAL PARA TRANSICIONES SUAVES */
+/* FONDO GENERAL CLARO CON TEXTO OSCURO OBLIGATORIO */
 .stApp {
     background: linear-gradient(135deg, #fdf2f8, #fce7f3, #ffffff) !important;
-    color: #334155 !important;
+    color: #1e293b !important; /* Gris casi negro para lectura perfecta */
     font-family: 'Montserrat', sans-serif !important;
-    animation: fadeInBody 0.4s ease-in-out;
 }
 
-@keyframes fadeInBody {
-    from { opacity: 0; transform: translateY(2px); }
-    to { opacity: 1; transform: translateY(0); }
+/* FORZAR COLOR OSCURO EN TEXTOS DE STREAMLIT, LABELS Y PARÁGRAFOS */
+.stApp p, .stApp label, .stApp span, .stApp div, [data-testid="stMarkdownContainer"] p {
+    color: #1e293b !important;
+    font-weight: 500 !important;
 }
 
-/* ANIMACIÓN PARA CADA CONTENEDOR O TARJETA AL RENDERIZAR */
-[data-testid="stVerticalBlock"] > div {
-    animation: fadeInComponent 0.3s ease-out;
-}
-
-@keyframes fadeInComponent {
-    from { opacity: 0; }
-    to { opacity: 1; }
-}
-
-h1, h2, h3, h4, h5, h6 { 
+/* TÍTULOS EN COLOR ROSADO COMPORTAMIENTO PREMIUM Y VISIBLE */
+h1, h2, h3, h4, h5, h6, [data-testid="stMarkdownContainer"] h1, [data-testid="stMarkdownContainer"] h2, [data-testid="stMarkdownContainer"] h3 { 
     font-family: 'Playfair Display', serif !important;
     color: #9d174d !important; 
     font-weight: 700 !important;
 }
 
-/* INPUTS CON FOCO SUAVE */
-input, select, textarea {
+/* CAJAS DE INPUT, SELECCIÓN Y TEXTO (TEXTO INTERNO OSCURO, FONDO BLANCO) */
+input, select, textarea, div[data-baseweb="select"] {
     background-color: #ffffff !important;
-    color: #334155 !important;
+    color: #1e293b !important;
     border: 1px solid #f472b6 !important;
     border-radius: 10px !important;
-    transition: all 0.25s ease-in-out !important;
-}
-input:focus {
-    border-color: #db2777 !important;
-    box-shadow: 0 0 0 3px rgba(219, 39, 119, 0.15) !important;
 }
 
-/* BOTONES PREMIUM: EFECTO HÁPTICO AL PRESIONAR */
+/* COMPORTAMIENTO INTERNO DE LAS LISTAS DESPLEGABLES */
+div[data-baseweb="select"] * {
+    color: #1e293b !important;
+}
+
+/* BOTONES PREMIUM CON LETRA BLANCA DE ALTO CONTRASTE */
 div.stButton > button, div[data-testid="stForm"] button {
     background: linear-gradient(90deg, #f43f5e, #ec4899) !important;
     color: #ffffff !important;
@@ -140,34 +126,38 @@ div.stButton > button, div[data-testid="stForm"] button {
     box-shadow: 0px 4px 12px rgba(236, 72, 153, 0.2);
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
 }
-div.stButton > button:hover, div[data-testid="stForm"] button:hover {
+div.stButton > button:hover {
     background: linear-gradient(90deg, #ec4899, #d946ef) !important;
-    transform: translateY(-1px);
-    box-shadow: 0px 6px 16px rgba(236, 72, 153, 0.35);
-}
-div.stButton > button:active, div[data-testid="stForm"] button:active {
-    transform: translateY(1px) scale(0.98); /* Contracción sutil al hacer clic */
-    box-shadow: 0px 2px 6px rgba(236, 72, 153, 0.1);
+    color: #ffffff !important;
 }
 
+/* SIDEBAR EN COLOR CONTRASTANTE */
 section[data-testid="stSidebar"] {
     background: linear-gradient(180deg, #fce7f3, #fbcfe8) !important;
     border-right: 1px solid #f472b6;
 }
+section[data-testid="stSidebar"] * {
+    color: #1e293b !important;
+}
 
+/* BLOQUES DE MÉTRICAS (NÚMEROS Y TITULOS) */
 [data-testid="stMetric"] {
     background-color: #ffffff !important;
     padding: 20px;
     border-radius: 18px;
     border: 1px solid #fbcfe8;
     text-align: center;
-    box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.01);
-    transition: transform 0.2s ease;
+    box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.03);
 }
-[data-testid="stMetric"]:hover {
-    transform: translateY(-2px);
+[data-testid="stMetricLabel"] div {
+    color: #64748b !important; /* Gris oscuro para el subtítulo */
+}
+[data-testid="stMetricValue"] div {
+    color: #9d174d !important; /* Rosado oscuro para el número grande */
+    font-weight: 700 !important;
 }
 
+/* TARJETAS DEL INVENTARIO */
 .card {
     background: #ffffff !important;
     padding: 22px;
@@ -175,11 +165,13 @@ section[data-testid="stSidebar"] {
     margin-bottom: 20px;
     border: 1px solid #fbcfe8;
     box-shadow: 0px 6px 18px rgba(219, 39, 119, 0.03);
-    transition: all 0.25s ease;
 }
-.card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0px 8px 22px rgba(219, 39, 119, 0.08);
+.card h3 {
+    color: #9d174d !important;
+    margin-top: 0px;
+}
+.card p, .card b {
+    color: #334155 !important;
 }
 
 .section-title {
@@ -188,6 +180,10 @@ section[data-testid="stSidebar"] {
     border-radius: 12px;
     border-left: 6px solid #ec4899;
     margin-bottom: 18px;
+}
+.section-title h3 {
+    margin: 0px !important;
+    color: #9d174d !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -205,14 +201,20 @@ menu = st.sidebar.selectbox(
 # 1. PANTALLA: INICIO Y GRÁFICOS
 # =========================================
 if menu == "🏠 Inicio y Gráficos":
-    st.title("💎 BISUTERIA BRI RODRIGUEZ JEWERLY")
+    st.title("💎 BIZUTERIA BRIRODRIGUEZ")
     st.subheader("Dashboard Gerencial Automatizado")
     st.markdown("---")
 
     conn = conectar_db()
-    total_productos = conn.execute("SELECT COUNT(*) FROM inventario").fetchone()[0]
-    total_stock_fisico = conn.execute("SELECT SUM(stock) FROM inventario").fetchone()[0] or 0
-    ventas_db = conn.execute("SELECT total_facturado FROM ventas_maestro").fetchall()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM inventario")
+    total_productos = cursor.fetchone()[0]
+    
+    cursor.execute("SELECT SUM(stock) FROM inventario")
+    total_stock_fisico = cursor.fetchone()[0] or 0
+    
+    cursor.execute("SELECT total_facturado FROM ventas_maestro")
+    ventas_db = cursor.fetchall()
     total_recaudado = sum(Decimal(v[0]) for v in ventas_db)
     
     col1, col2, col3 = st.columns(3)
@@ -260,8 +262,6 @@ if menu == "🏠 Inicio y Gráficos":
                 st.bar_chart(df_multiples.set_index("codigo_soporte")["Total Facturado ($)"], color="#db2777")
         else:
             st.info("Aún no se registran facturas con múltiples artículos variados.")
-    else:
-        st.info("💡 Los gráficos diferenciados se activarán al registrar los primeros soportes de venta.")
 
 # =========================================
 # 2. PANTALLA: AGREGAR PRODUCTO
@@ -289,16 +289,18 @@ elif menu == "➕ Agregar Producto":
                 precio_exacto = str(Decimal(str(precio_input)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
                 costo_exacto = str(Decimal(str(costo_input)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
                 
-                with st.spinner("Sincronizando con catálogo..."):
+                with st.spinner("Sincronizando con catálogo en la nube..."):
                     conn = conectar_db()
+                    cursor = conn.cursor()
                     try:
-                        conn.execute(
-                            "INSERT INTO inventario (nombre, categoria, precio, stock, costo_compra) VALUES (?, ?, ?, ?, ?)",
+                        cursor.execute(
+                            "INSERT INTO inventario (nombre, categoria, precio, stock, costo_compra) VALUES (%s, %s, %s, %s, %s)",
                             (nombre.strip(), categoria, precio_exacto, int(stock_input), costo_exacto)
                         )
                         conn.commit()
                         st.success(f"✔ El producto '{nombre}' se ha guardado correctamente.")
-                    except sqlite3.IntegrityError:
+                    except psycopg2.IntegrityError:
+                        conn.rollback()
                         st.error(f"❌ Ya existe un artículo registrado con el nombre '{nombre}'.")
 
 # =========================================
@@ -308,7 +310,9 @@ elif menu == "📦 Inventario":
     st.title("📦 Almacén Físico y Control de Stock")
 
     conn = conectar_db()
-    productos = conn.execute("SELECT nombre, categoria, precio, stock, costo_compra FROM inventario").fetchall()
+    cursor = conn.cursor()
+    cursor.execute("SELECT nombre, categoria, precio, stock, costo_compra FROM inventario")
+    productos = cursor.fetchall()
 
     if not productos:
         st.warning("El almacén está vacío.")
@@ -335,7 +339,9 @@ elif menu == "💰 Registrar Venta (POS)":
     st.markdown("---")
 
     conn = conectar_db()
-    db_productos = conn.execute("SELECT nombre, precio, stock, categoria, costo_compra FROM inventario WHERE stock > 0").fetchall()
+    cursor = conn.cursor()
+    cursor.execute("SELECT nombre, precio, stock, categoria, costo_compra FROM inventario WHERE stock > 0")
+    db_productos = cursor.fetchall()
 
     if not db_productos:
         st.warning("No hay mercancías con existencias en el almacén para vender.")
@@ -430,11 +436,10 @@ elif menu == "💰 Registrar Venta (POS)":
                         "subtotal": subtotal_neto_item,
                         "costo_total_historico": costo_total_lote
                     })
-                    st.toast(f"✔ {prod_seleccionado} añadido al pedido.")
+                    st.toast(f"✔ {prod_seleccionado} añadido.")
 
         with col_der:
             st.markdown("### 🛒 Resumen de la Factura en Curso")
-            
             if not st.session_state.carrito:
                 st.markdown("<p style='color:#64748b;'>El carrito está vacío.</p>", unsafe_allow_html=True)
             else:
@@ -459,36 +464,35 @@ elif menu == "💰 Registrar Venta (POS)":
                 with c_btn2:
                     if st.button("🚀 Confirmar y Procesar Venta"):
                         if c_nombre.strip() == "" or c_id.strip() == "":
-                            st.error("❌ Los campos Nombre y Cédula del cliente son obligatorios.")
+                            st.error("❌ Los campos Nombre y Cédula son obligatorios.")
                         else:
-                            # PROCESADOR ESTÉTICO DE TRANSACCIÓN SINCRO
-                            with st.spinner("Emitiendo factura e ingresos reales..."):
+                            with st.spinner("Procesando venta en la nube..."):
                                 conn = conectar_db()
                                 cursor = conn.cursor()
-                                
                                 cod_soporte = f"FAC-{datetime.now().strftime('%d%H%M%S')}"
                                 ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                 
                                 try:
                                     cursor.execute("""
                                         INSERT INTO ventas_maestro (codigo_soporte, fecha_hora, cliente_nombre, cliente_id, direccion, telefono, ciudad, responsable_iva, total_facturado)
-                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                                     """, (cod_soporte, ahora, c_nombre.strip(), c_id.strip(), c_direccion.strip(), c_telefono.strip(), c_ciudad.strip(), c_iva, str(total_factura)))
                                     
                                     for item in st.session_state.carrito:
                                         cursor.execute("""
                                             INSERT INTO ventas_detalle (codigo_soporte, producto, categoria, precio_unitario, cantidad, descuento_total, subtotal, costo_total_historico)
-                                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                                         """, (cod_soporte, item["producto"], item["categoria"], str(item["precio_unitario"]), item["cantidad"], str(item["descuento"]), str(item["subtotal"]), str(item["costo_total_historico"])))
                                         
-                                        cursor.execute("UPDATE inventario SET stock = stock - ? WHERE nombre = ?", (item["cantidad"], item["producto"]))
+                                        cursor.execute("UPDATE inventario SET stock = stock - %s WHERE nombre = %s", (item["cantidad"], item["producto"]))
                                     
                                     conn.commit()
-                                    time.sleep(0.4) # Retraso orgánico sutil para la animación del spinner
-                                    st.success(f"🎉 ¡Factura {cod_soporte} procesada con éxito!")
+                                    time.sleep(0.4)
+                                    st.success(f"🎉 ¡Factura {cod_soporte} guardada!")
                                     st.session_state.carrito = []
                                     st.rerun()
                                 except Exception as e:
+                                    conn.rollback()
                                     st.error(f"Error en base de datos: {e}")
 
 # =========================================
@@ -496,27 +500,26 @@ elif menu == "💰 Registrar Venta (POS)":
 # =========================================
 elif menu == "📊 Soporte Contable":
     st.title("📊 Libro Mayor de Contabilidad e Ingresos")
-    st.subheader("Auditoría de Facturas y Rentabilidad Real (Cierre de Mes)")
     st.markdown("---")
 
     conn = conectar_db()
     df_libros = pd.read_sql_query("""
-        SELECT m.codigo_soporte AS [Nro Factura],
-               m.fecha_hora AS [Fecha],
-               m.cliente_nombre AS [Cliente],
-               d.producto AS [Artículo],
-               d.precio_unitario AS [Precio Vitrina ($)],
-               d.cantidad AS [Cant],
-               d.descuento_total AS [Descuento ($)],
-               d.subtotal AS [Ingreso Neto Real ($)],
-               d.costo_total_historico AS [Costo Compra Total ($)]
+        SELECT m.codigo_soporte AS "Nro Factura",
+               m.fecha_hora AS "Fecha",
+               m.cliente_nombre AS "Cliente",
+               d.producto AS "Artículo",
+               d.precio_unitario AS "Precio Vitrina ($)",
+               d.cantidad AS "Cant",
+               d.descuento_total AS "Descuento ($)",
+               d.subtotal AS "Ingreso Neto Real ($)",
+               d.costo_total_historico AS "Costo Compra Total ($)"
         FROM ventas_maestro m
         JOIN ventas_detalle d ON m.codigo_soporte = d.codigo_soporte
         ORDER BY m.fecha_hora DESC
     """, conn)
 
     if df_libros.empty:
-        st.info("No se registran movimientos comerciales en las tablas contables.")
+        st.info("No se registran movimientos comerciales.")
     else:
         df_libros["Precio Vitrina ($)"] = df_libros["Precio Vitrina ($)"].astype(float)
         df_libros["Descuento ($)"] = df_libros["Descuento ($)"].astype(float)
@@ -542,7 +545,7 @@ elif menu == "📊 Soporte Contable":
             df_libros.to_excel(writer, index=False, sheet_name='Contabilidad_BriRodriguez')
         
         st.download_button(
-            label="📥 Descargar Reporte de Utilidades y Costos en Excel (.xlsx)",
+            label="📥 Descargar Reporte en Excel (.xlsx)",
             data=buffer_excel.getvalue(),
             file_name=f"Cierre_Utilidades_BriRodriguez_{datetime.now().strftime('%Y%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -555,10 +558,12 @@ elif menu == "⚙️ Panel Administrador":
     st.title("⚙️ Panel de Control Gerencial")
     st.markdown("---")
     conn = conectar_db()
-    lista_productos = conn.execute("SELECT id, nombre, categoria, precio, stock, costo_compra FROM inventario").fetchall()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, nombre, categoria, precio, stock, costo_compra FROM inventario")
+    lista_productos = cursor.fetchall()
 
     if not lista_productos:
-        st.info("No hay productos registrados en la base de datos para editar.")
+        st.info("No hay productos registrados.")
     else:
         nombres_productos = [p[1] for p in lista_productos]
         producto_a_modificar = st.selectbox("Selecciona el producto que deseas gestionar:", nombres_productos)
@@ -577,13 +582,10 @@ elif menu == "⚙️ Panel Administrador":
                 precio_exacto_ed = str(Decimal(str(nuevo_precio)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
                 costo_exacto_ed = str(Decimal(str(nuevo_costo)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
                 
-                with st.spinner("Actualizando registros..."):
-                    conn.execute(
-                        "UPDATE inventario SET nombre = ?, categoria = ?, precio = ?, stock = ?, costo_compra = ? WHERE id = ?",
+                with st.spinner("Actualizando en la nube..."):
+                    cursor.execute(
+                        "UPDATE inventario SET nombre = %s, categoria = %s, precio = %s, stock = %s, costo_compra = %s WHERE id = %s",
                         (nuevo_nombre.strip(), nueva_categoria, precio_exacto_ed, int(nuevo_stock), costo_exacto_ed, id_prod)
                     )
                     conn.commit()
                     st.success("Cambios guardados con éxito.")
-                    
-                    
-
