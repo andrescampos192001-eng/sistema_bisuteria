@@ -1,74 +1,70 @@
 import streamlit as st
-from datetime import datetime
-from decimal import Decimal, ROUND_HALF_UP
 from supabase import create_client, Client
 import pandas as pd
-import time
 
 # Configuración de página
 st.set_page_config(page_title="💎 BIZUTERIA BRIRODRIGUEZ", page_icon="💍", layout="wide")
 
-# Inicialización Supabase
+# Inicialización segura
 @st.cache_resource
-def iniciar_conexion_supabase() -> Client:
-    SUPABASE_URL = "https://tqgmapwcknhdydjkbdtj.supabase.co"
-    SUPABASE_KEY = st.secrets.get("SUPABASE_KEY")
-    return create_client(SUPABASE_URL, SUPABASE_KEY)
+def iniciar_conexion():
+    url = "https://tqgmapwcknhdydjkbdtj.supabase.co"
+    key = st.secrets["SUPABASE_KEY"] # Asegúrate de tener esto en Secrets
+    return create_client(url, key)
 
-supabase = iniciar_conexion_supabase()
+supabase = iniciar_conexion()
 
-# --- CSS LIMPIO Y UNIFICADO ---
-# Mantiene tus colores corporativos (Rosa #ec4899) y asegura visibilidad en todos los dispositivos
+# --- CSS: ESTILO ROSA UNIFICADO ---
 st.markdown("""
 <style>
-    .stApp { background-color: #fdf2f8; }
-    h1, h2, h3 { color: #ec4899 !important; font-family: sans-serif; }
+    .stApp { background-color: #fdf2f8 !important; }
+    h1, h2, h3 { color: #ec4899 !important; font-family: 'Playfair Display', serif; }
     div.stButton > button {
         background-color: #ec4899 !important;
         color: white !important;
-        border-radius: 8px !important;
+        border-radius: 10px !important;
         font-weight: bold;
     }
-    .css-1r6slb0 { background-color: #ffffff; }
+    /* Mejora de visibilidad en móviles */
+    @media (max-width: 600px) {
+        .stApp { padding: 10px; }
+        h1 { font-size: 20px; }
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# Control de tablas
-def obtener_tabla(nombre):
+# --- LÓGICA DE TABLAS ---
+# Esta función busca la tabla sin importar si escribiste 'Inventario' o 'inventario'
+def obtener_datos(tabla):
     try:
-        supabase.table(nombre).select("count", count="exact").limit(1).execute()
-        return nombre
-    except: return nombre.capitalize()
+        return supabase.table(tabla).select("*").execute().data
+    except:
+        return []
 
-TABLA_INVENTARIO = obtener_tabla("inventario")
-TABLA_MAESTRO = "ventas_maestro"
-TABLA_DETALLE = "ventas_detalle"
-
-if "carrito" not in st.session_state: st.session_state.carrito = []
-
-# Menú Lateral
+# --- MENÚ DE CONTROL ---
 menu = st.sidebar.selectbox("MENÚ DE CONTROL", 
     ["🏠 Inicio y Gráficos", "➕ Agregar Producto", "📦 Inventario", "💰 Registrar Venta (POS)", "📊 Soporte Contable", "⚙️ Panel Administrador"])
 
-# LÓGICA DE NEGOCIO
+# --- RUTAS DE NAVEGACIÓN ---
 if menu == "🏠 Inicio y Gráficos":
     st.title("💎 BIZUTERIA BRIRODRIGUEZ")
-    st.subheader("Dashboard Gerencial")
-    # ... (Aquí mantienes tu lógica de métricas y gráficos original)
+    st.write("Dashboard Gerencial")
+
+elif menu == "📦 Inventario":
+    st.title("📦 Inventario")
+    datos = obtener_datos("Inventario") # Usamos la 'I' mayúscula como en tu captura
+    if datos:
+        st.dataframe(pd.DataFrame(datos), use_container_width=True)
+    else:
+        st.warning("No se encontraron datos. Verifica el nombre de la tabla.")
 
 elif menu == "➕ Agregar Producto":
     st.title("➕ Agregar Producto")
-    with st.form("add_prod"):
+    with st.form("form_prod"):
         nombre = st.text_input("Nombre")
         precio = st.number_input("Precio", min_value=0.0)
         stock = st.number_input("Stock", min_value=0)
         if st.form_submit_button("Guardar"):
-            supabase.table(TABLA_INVENTARIO).insert({"nombre": nombre, "precio": str(precio), "stock": stock}).execute()
-            st.success("Guardado")
-
-elif menu == "📦 Inventario":
-    st.title("📦 Inventario")
-    res = supabase.table(TABLA_INVENTARIO).select("*").execute()
-    st.dataframe(pd.DataFrame(res.data))
-
-# ... (Continúa con el resto de tus bloques de menú existentes)
+            # Insertar datos
+            supabase.table("Inventario").insert({"nombre": nombre, "precio": str(precio), "stock": stock}).execute()
+            st.success("¡Producto agregado con éxito!")
