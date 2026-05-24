@@ -5,7 +5,7 @@ from supabase import create_client, Client
 import pandas as pd
 import time
 
-# Configuración de página
+# Configuración inicial
 st.set_page_config(page_title="💎 BIZUTERIA BRIRODRIGUEZ", page_icon="💍", layout="wide")
 
 # Inicialización Supabase
@@ -17,25 +17,24 @@ def iniciar_conexion_supabase() -> Client:
 
 supabase = iniciar_conexion_supabase()
 
-# --- CSS MINIMALISTA Y SEGURO ---
-# Solo aplicamos lo necesario para mantener los colores rosas sin ocultar elementos
+# --- ESTILOS LIMPIOS Y SEGUROS ---
 st.markdown("""
 <style>
-    /* Aseguramos que el contenedor principal esté visible */
+    /* Fondo principal */
     .stApp { background-color: #fdf2f8; }
     
-    /* Mantenemos el estilo de títulos */
-    h1, h2, h3 { color: #ec4899 !important; font-family: 'Playfair Display', serif; }
+    /* Títulos y fuentes */
+    h1, h2, h3 { color: #ec4899 !important; font-family: sans-serif; }
     
-    /* Botones y elementos base */
+    /* Botones principales */
     div.stButton > button {
         background-color: #ec4899 !important;
         color: white !important;
         border-radius: 8px !important;
+        font-weight: bold;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Lógica del programa (Mantenemos tus funciones intactas)
-TABLA_INVENTARIO = "Inventario"
-# ... (Asegúrate de copiar el resto de tu lógica de negocio original aquí)
+# Lógica principal (Tu código de negocio anterior va aquí)
+# ... (asegúrate de mantener tus funciones de obtener_tabla, manejo de inventario, etc.)
