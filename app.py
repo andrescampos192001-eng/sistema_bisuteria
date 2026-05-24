@@ -23,7 +23,6 @@ def iniciar_conexion_supabase() -> Client:
     SUPABASE_URL = "https://tqgmapwcknhdydjkbdtj.supabase.co"
     SUPABASE_KEY = st.secrets.get("SUPABASE_KEY")
     if not SUPABASE_KEY:
-        # Clave de respaldo por si acaso
         SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxZ21hcHdja25oZHlkamtidGRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTY4NDA4ODcsImV4cCI6MjAzMjQxNjg4N30.8_9I0LidA2k6Fj_XvWj8v1N_4j_4_9_X_8_9_I0LidA"
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -38,15 +37,12 @@ if "carrito" not in st.session_state:
 # =========================================
 # CONTROL AUTOMÁTICO DE MAYÚSCULAS EN TABLAS
 # =========================================
-# Esta función intenta leer la tabla en minúsculas; si falla por esquema, usa Mayúsculas.
 def obtener_tabla(nombre_tabla):
     try:
-        # Intento estándar en minúsculas
         supabase.table(nombre_tabla).select("count", count="exact").limit(1).execute()
         return nombre_tabla
     except Exception as e:
         if "PGRST205" in str(e) or "Could not find the table" in str(e):
-            # Si falla, capitaliza la primera letra (ej: 'inventario' -> 'Inventario')
             return nombre_tabla.capitalize()
         return nombre_tabla
 
@@ -55,105 +51,107 @@ TABLA_MAESTRO = obtener_tabla("ventas_maestro")
 TABLA_DETALLE = obtener_tabla("ventas_detalle")
 
 # =========================================
-# CSS INTERACTIVO: ENFOQUE 100% MÓVIL Y MENÚ INVERTIDO
+# CSS COORDINADO: MÁXIMO CONTRASTE MÓVIL (PC INTACTO)
 # =========================================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Playfair+Display:wght@700&display=swap');
 
-/* --- ESTILOS GENERALES Y RESPONSIVE --- */
-.stApp {
-    background: linear-gradient(135deg, #fdf2f8, #fce7f3, #ffffff) !important;
-    color: #1e293b !important;
-    font-family: 'Montserrat', sans-serif !important;
-}
+/* --- COORDINACIÓN DE COLORES Y CONTRASTE EN CELULAR --- */
+@media (max-width: 768px) {
+    /* Fondo principal limpio para el celular */
+    .stApp {
+        background: #fdf2f8 !important;
+        color: #000000 !important;
+        font-family: 'Montserrat', sans-serif !important;
+    }
 
-/* Ajuste automático de fuentes en móviles */
-html, body, [data-testid="stMarkdownContainer"] p, .stApp p, .stApp label, .stApp span {
-    color: #1e293b !important;
-    font-weight: 600 !important;
-    font-size: calc(14px + 0.3vw) !important;
-}
+    /* Forzar textos legibles (Negro Puro) en párrafos, etiquetas y textos del cuerpo */
+    p, label, span, [data-testid="stMarkdownContainer"] p {
+        color: #000000 !important;
+        font-weight: 600 !important;
+        font-size: 15px !important;
+    }
 
-h1, [data-testid="stMarkdownContainer"] h1 { 
-    font-family: 'Playfair Display', serif !important;
-    color: #9d174d !important; 
-    font-weight: 700 !important;
-    font-size: calc(24px + 1vw) !important;
-}
+    /* Títulos principales en rosa corporativo vibrante */
+    h1, [data-testid="stMarkdownContainer"] h1 { 
+        font-family: 'Playfair Display', serif !important;
+        color: #9d174d !important; 
+        font-weight: 700 !important;
+        font-size: 26px !important;
+        text-align: center;
+        margin-bottom: 20px;
+    }
 
-h2, h3, [data-testid="stMarkdownContainer"] h2, [data-testid="stMarkdownContainer"] h3 {
-    font-family: 'Playfair Display', serif !important;
-    color: #c2185b !important;
-    font-size: calc(18px + 0.5vw) !important;
-}
+    /* Subtítulos legibles */
+    h2, h3, [data-testid="stMarkdownContainer"] h2, [data-testid="stMarkdownContainer"] h3 {
+        font-family: 'Playfair Display', serif !important;
+        color: #c2185b !important;
+        font-weight: 700 !important;
+        font-size: 19px !important;
+    }
 
-/* Contenedores e inputs autoajustables */
-input, select, textarea, div[data-baseweb="select"] {
-    background-color: #ffffff !important;
-    color: #1e293b !important;
-    border: 2px solid #f472b6 !important;
-    border-radius: 10px !important;
-    font-size: 16px !important;
-    padding: 8px !important;
-}
+    /* Campos de entrada (Inputs) coordinados con fondo blanco y contorno rosa definido */
+    input, select, textarea, div[data-baseweb="select"], div[data-baseweb="input"] {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        border: 2px solid #ec4899 !important;
+        border-radius: 10px !important;
+        font-size: 16px !important;
+    }
 
-div[data-baseweb="select"] * {
-    color: #1e293b !important;
-}
+    /* Asegurar que el texto dentro de las listas desplegables sea siempre negro */
+    div[data-baseweb="select"] * {
+        color: #000000 !important;
+        font-weight: 600 !important;
+    }
 
-/* Botones Grandes y Táctiles para Dedos */
-div.stButton > button, div[data-testid="stForm"] button {
-    background: linear-gradient(90deg, #f43f5e, #ec4899) !important;
-    color: #ffffff !important;
-    border: none !important;
-    border-radius: 12px !important;
-    width: 100% !important;
-    padding: 14px 20px !important;
-    font-weight: 700 !important;
-    font-size: 16px !important;
-    box-shadow: 0px 4px 12px rgba(236, 72, 153, 0.2);
-}
+    /* Botones táctiles coordinados en Degradado Rosa */
+    div.stButton > button, div[data-testid="stForm"] button {
+        background: linear-gradient(90deg, #f43f5e, #ec4899) !important;
+        color: #ffffff !important;
+        border: none !important;
+        border-radius: 12px !important;
+        width: 100% !important;
+        padding: 14px 20px !important;
+        font-weight: 700 !important;
+        font-size: 16px !important;
+        box-shadow: 0px 4px 10px rgba(236, 72, 153, 0.3) !important;
+    }
 
-/* --- CAMBIO SOLICITADO: MENÚ LATERAL INVERTIDO (FONDO BLANCO, TEXTO NEGRO) --- */
-section[data-testid="stSidebar"] {
-    background-color: #ffffff !important;
-    background-image: none !important;
-    border-right: 2px solid #e2e8f0 !important;
-}
+    /* --- MENÚ LATERAL: FONDO BLANCO Y CONTRASTE NEGRO --- */
+    section[data-testid="stSidebar"] {
+        background-color: #ffffff !important;
+        border-right: 3px solid #f472b6 !important;
+    }
 
-/* Forzar todo el contenido, títulos y selectores del menú a ser negro sobre fondo blanco */
-section[data-testid="stSidebar"] * {
-    color: #000000 !important;
-}
+    section[data-testid="stSidebar"] * {
+        color: #000000 !important;
+    }
 
-section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2, section[data-testid="stSidebar"] h3, section[data-testid="stSidebar"] span {
-    color: #000000 !important;
-    font-weight: 700 !important;
-}
+    section[data-testid="stSidebar"] div[data-baseweb="select"] {
+        border: 2px solid #000000 !important;
+        background-color: #fff1f2 !important;
+    }
 
-section[data-testid="stSidebar"] div[data-baseweb="select"] {
-    border: 2px solid #000000 !important;
-    background-color: #f8fafc !important;
-}
+    /* Tarjetas del Almacén Físico */
+    .card {
+        background: #ffffff !important;
+        padding: 16px;
+        border-radius: 14px;
+        margin-bottom: 15px;
+        border: 2px solid #fbcfe8 !important;
+        box-shadow: 0px 4px 8px rgba(0,0,0,0.05);
+        width: 100% !important;
+    }
 
-/* Tarjetas de inventario adaptables */
-.card {
-    background: #ffffff !important;
-    padding: 16px;
-    border-radius: 14px;
-    margin-bottom: 15px;
-    border: 2px solid #fbcfe8;
-    box-shadow: 0px 4px 10px rgba(0,0,0,0.02);
-    width: 100% !important;
-}
-
-.section-title {
-    background-color: #ffffff !important;
-    padding: 10px 15px;
-    border-radius: 10px;
-    border-left: 5px solid #ec4899;
-    margin-bottom: 12px;
+    .section-title {
+        background-color: #ffffff !important;
+        padding: 8px 12px;
+        border-radius: 8px;
+        border-left: 5px solid #ec4899;
+        margin-bottom: 10px;
+    }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -167,7 +165,6 @@ menu = st.sidebar.selectbox(
     ["🏠 Inicio y Gráficos", "➕ Agregar Producto", "📦 Inventario", "💰 Registrar Venta (POS)", "📊 Soporte Contable", "⚙️ Panel Administrador"]
 )
 
-# Auxiliar para formatear errores visuales de la API
 def manejar_error_api(e):
     st.error(f"⚠️ Error de comunicación con el almacén: {e}")
 
@@ -276,10 +273,10 @@ elif menu == "📦 Inventario":
                 st.markdown(f'''
                 <div class="card">
                     <span style="float: right; background-color: {color_stock}; padding: 3px 8px; border-radius: 6px; font-size: 11px; color: white;">{alerta}</span>
-                    <h3>{fila["nombre"]}</h3>
-                    <p>📂 <b>Línea:</b> {fila["categoria"]}</p>
-                    <p>💸 <b>Costo:</b> ${Decimal(str(fila["costo_compra"])):,.2f} | 💰 <b>Vitrina:</b> ${Decimal(str(fila["precio"])):,.2f}</p>
-                    <p>📦 <b>Disponibilidad:</b> {stock_act} unds</p>
+                    <h3 style="color: #9d174d !important; margin-top: 0;">{fila["nombre"]}</h3>
+                    <p style="margin: 4px 0; color: #000000 !important;">📂 <b>Línea:</b> {fila["categoria"]}</p>
+                    <p style="margin: 4px 0; color: #000000 !important;">💸 <b>Costo:</b> ${Decimal(str(fila["costo_compra"])):,.2f} | 💰 <b>Vitrina:</b> ${Decimal(str(fila["precio"])):,.2f}</p>
+                    <p style="margin: 4px 0; color: #000000 !important;">📦 <b>Disponibilidad:</b> <span style="font-size: 16px; color: #c2185b !important;">{stock_act} unds</span></p>
                 </div>
                 ''', unsafe_allow_html=True)
     except Exception as e:
@@ -446,7 +443,7 @@ elif menu == "⚙️ Panel Administrador":
                             "nombre": nuevo_nombre.strip(), "precio": str(nuevo_precio),
                             "stock": int(nuevo_stock), "costo_compra": str(nuevo_costo)
                         }).eq("id", int(fila_prod["id"])).execute()
-                        st.success("Cambios aplicados.")
+                        st.success("Cambios applied successfully.")
                         time.sleep(0.5)
                         st.rerun()
                     except Exception as e:
