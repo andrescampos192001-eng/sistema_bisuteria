@@ -21,13 +21,10 @@ st.set_page_config(
 @st.cache_resource
 def iniciar_conexion_supabase() -> Client:
     SUPABASE_URL = "https://tqgmapwcknhdydjkbdtj.supabase.co"
-    
-    # Intenta obtener la clave desde los Secrets de Streamlit, si no usa la de respaldo anterior
     SUPABASE_KEY = st.secrets.get("SUPABASE_KEY")
     if not SUPABASE_KEY:
-        # Clave genérica anterior en caso de no haber configurado secrets aún
+        # Clave de respaldo por si acaso
         SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxZ21hcHdja25oZHlkamtidGRqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MTY4NDA4ODcsImV4cCI6MjAzMjQxNjg4N30.8_9I0LidA2k6Fj_XvWj8v1N_4j_4_9_X_8_9_I0LidA"
-        
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 try:
@@ -39,11 +36,30 @@ if "carrito" not in st.session_state:
     st.session_state.carrito = []
 
 # =========================================
+# CONTROL AUTOMÁTICO DE MAYÚSCULAS EN TABLAS
+# =========================================
+# Esta función intenta leer la tabla en minúsculas; si falla por esquema, usa Mayúsculas.
+def obtener_tabla(nombre_tabla):
+    try:
+        # Intento estándar en minúsculas
+        supabase.table(nombre_tabla).select("count", count="exact").limit(1).execute()
+        return nombre_tabla
+    except Exception as e:
+        if "PGRST205" in str(e) or "Could not find the table" in str(e):
+            # Si falla, capitaliza la primera letra (ej: 'inventario' -> 'Inventario')
+            return nombre_tabla.capitalize()
+        return nombre_tabla
+
+TABLA_INVENTARIO = obtener_tabla("inventario")
+TABLA_MAESTRO = obtener_tabla("ventas_maestro")
+TABLA_DETALLE = obtener_tabla("ventas_detalle")
+
+# =========================================
 # CSS INTERACTIVO: ENFOQUE 100% MÓVIL Y MENÚ INVERTIDO
 # =========================================
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2 family=Montserrat:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&display=swap');
 
 /* --- ESTILOS GENERALES Y RESPONSIVE --- */
 .stApp {
@@ -56,7 +72,7 @@ st.markdown("""
 html, body, [data-testid="stMarkdownContainer"] p, .stApp p, .stApp label, .stApp span {
     color: #1e293b !important;
     font-weight: 600 !important;
-    font-size: calc(14px + 0.3vw) !important; /* Adaptable al tamaño de pantalla */
+    font-size: calc(14px + 0.3vw) !important;
 }
 
 h1, [data-testid="stMarkdownContainer"] h1 { 
@@ -78,7 +94,7 @@ input, select, textarea, div[data-baseweb="select"] {
     color: #1e293b !important;
     border: 2px solid #f472b6 !important;
     border-radius: 10px !important;
-    font-size: 16px !important; /* Evita que iOS haga zoom molesto automático */
+    font-size: 16px !important;
     padding: 8px !important;
 }
 
@@ -92,7 +108,7 @@ div.stButton > button, div[data-testid="stForm"] button {
     color: #ffffff !important;
     border: none !important;
     border-radius: 12px !important;
-    width: 100% !important; /* Ocupa todo el ancho en celulares */
+    width: 100% !important;
     padding: 14px 20px !important;
     font-weight: 700 !important;
     font-size: 16px !important;
@@ -153,10 +169,7 @@ menu = st.sidebar.selectbox(
 
 # Auxiliar para formatear errores visuales de la API
 def manejar_error_api(e):
-    if "401" in str(e) or "Invalid API key" in str(e):
-        st.error("⚠️ **Error de Autenticación (401):** La clave API actual es inválida. Por favor, asegúrate de colocar tu `SUPABASE_KEY` real en la sección de **Secrets** de Streamlit Cloud.")
-    else:
-        st.error(f"⚠️ Error de comunicación con el almacén: {e}")
+    st.error(f"⚠️ Error de comunicación con el almacén: {e}")
 
 # =========================================
 # 1. PANTALLA: INICIO Y GRÁFICOS
@@ -167,24 +180,23 @@ if menu == "🏠 Inicio y Gráficos":
     st.markdown("---")
 
     try:
-        res_inv = supabase.table("inventario").select("stock").execute()
+        res_inv = supabase.table(TABLA_INVENTARIO).select("stock").execute()
         df_inv_res = pd.DataFrame(res_inv.data)
         
         total_productos = len(df_inv_res)
         total_stock_fisico = int(df_inv_res["stock"].sum()) if not df_inv_res.empty else 0
         
-        res_ventas = supabase.table("ventas_maestro").select("total_facturado").execute()
+        res_ventas = supabase.table(TABLA_MAESTRO).select("total_facturado").execute()
         df_ventas_res = pd.DataFrame(res_ventas.data)
         total_recaudado = sum(Decimal(str(v)) for v in df_ventas_res["total_facturado"]) if not df_ventas_res.empty else Decimal('0.00')
         
-        # Estructura de métricas en columnas verticales fluidas para celular
         st.metric("📦 Modelos de Productos", total_productos)
         st.metric("💰 Caja Total Recaudada", f"${total_recaudado:,.2f}")
         st.metric("📊 Unidades en Stock", f"{total_stock_fisico} unds")
         st.markdown("---")
 
-        res_m = supabase.table("ventas_maestro").select("codigo_soporte, total_facturado").execute()
-        res_d = supabase.table("ventas_detalle").select("codigo_soporte, id").execute()
+        res_m = supabase.table(TABLA_MAESTRO).select("codigo_soporte, total_facturado").execute()
+        res_d = supabase.table(TABLA_DETALLE).select("codigo_soporte, id").execute()
         
         df_m = pd.DataFrame(res_m.data)
         df_d = pd.DataFrame(res_d.data)
@@ -233,7 +245,7 @@ elif menu == "➕ Agregar Producto":
                 
                 with st.spinner("Sincronizando..."):
                     try:
-                        supabase.table("inventario").insert({
+                        supabase.table(TABLA_INVENTARIO).insert({
                             "nombre": nombre.strip(), "categoria": categoria,
                             "precio": precio_exacto, "stock": int(stock_input), "costo_compra": costo_exacto
                         }).execute()
@@ -250,7 +262,7 @@ elif menu == "📦 Inventario":
     st.title("📦 Almacén Físico")
 
     try:
-        res = supabase.table("inventario").select("*").order("nombre").execute()
+        res = supabase.table(TABLA_INVENTARIO).select("*").order("nombre").execute()
         df_inv = pd.DataFrame(res.data)
 
         if df_inv.empty:
@@ -280,7 +292,7 @@ elif menu == "💰 Registrar Venta (POS)":
     st.title("💰 Terminal POS Móvil")
 
     try:
-        res_v = supabase.table("inventario").select("nombre, precio, stock, categoria, costo_compra").gt("stock", 0).order("nombre").execute()
+        res_v = supabase.table(TABLA_INVENTARIO).select("nombre, precio, stock, categoria, costo_compra").gt("stock", 0).order("nombre").execute()
         df_prod_venta = pd.DataFrame(res_v.data)
     except Exception as e:
         df_prod_venta = pd.DataFrame()
@@ -349,21 +361,21 @@ elif menu == "💰 Registrar Venta (POS)":
                             cod_soporte = f"FAC-{datetime.now().strftime('%d%H%M%S')}"
                             ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             
-                            supabase.table("ventas_maestro").insert({
+                            supabase.table(TABLA_MAESTRO).insert({
                                 "codigo_soporte": cod_soporte, "fecha_hora": ahora, "cliente_nombre": c_nombre.strip(),
                                 "cliente_id": c_id.strip(), "direccion": c_direccion.strip(), "telefono": c_telefono.strip(),
                                 "ciudad": c_ciudad.strip(), "responsable_iva": c_iva, "total_facturado": str(total_factura)
                             }).execute()
                             
                             for item in st.session_state.carrito:
-                                supabase.table("ventas_detalle").insert({
+                                supabase.table(TABLA_DETALLE).insert({
                                     "codigo_soporte": cod_soporte, "producto": item["producto"], "categoria": item["categoria"],
                                     "precio_unitario": str(item["precio_unitario"]), "cantidad": item["cantidad"],
                                     "descuento_total": str(item["descuento"]), "subtotal": str(item["subtotal"]), "costo_total_historico": str(item["costo_total_historico"])
                                 }).execute()
                                 
                                 nuevo_stk = info_p['stock'] - item["cantidad"]
-                                supabase.table("inventario").update({"stock": nuevo_stk}).eq("nombre", item["producto"]).execute()
+                                supabase.table(TABLA_INVENTARIO).update({"stock": nuevo_stk}).eq("nombre", item["producto"]).execute()
                                 
                             st.success("🎉 ¡Venta guardada!")
                             st.session_state.carrito = []
@@ -384,8 +396,8 @@ elif menu == "📊 Soporte Contable":
     st.title("📊 Contabilidad")
 
     try:
-        res_m = supabase.table("ventas_maestro").select("codigo_soporte, fecha_hora, cliente_nombre").execute()
-        res_d = supabase.table("ventas_detalle").select("codigo_soporte, producto, precio_unitario, cantidad, descuento_total, subtotal, costo_total_historico").execute()
+        res_m = supabase.table(TABLA_MAESTRO).select("codigo_soporte, fecha_hora, cliente_nombre").execute()
+        res_d = supabase.table(TABLA_DETALLE).select("codigo_soporte, producto, precio_unitario, cantidad, descuento_total, subtotal, costo_total_historico").execute()
         
         df_m = pd.DataFrame(res_m.data)
         df_d = pd.DataFrame(res_d.data)
@@ -415,7 +427,7 @@ elif menu == "⚙️ Panel Administrador":
     st.title("⚙️ Administración")
     
     try:
-        res_a = supabase.table("inventario").select("*").order("nombre").execute()
+        res_a = supabase.table(TABLA_INVENTARIO).select("*").order("nombre").execute()
         df_admin = pd.DataFrame(res_a.data)
 
         if not df_admin.empty:
@@ -430,7 +442,7 @@ elif menu == "⚙️ Panel Administrador":
                 
                 if st.form_submit_button("Aplicar Cambios"):
                     try:
-                        supabase.table("inventario").update({
+                        supabase.table(TABLA_INVENTARIO).update({
                             "nombre": nuevo_nombre.strip(), "precio": str(nuevo_precio),
                             "stock": int(nuevo_stock), "costo_compra": str(nuevo_costo)
                         }).eq("id", int(fila_prod["id"])).execute()
