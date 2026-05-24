@@ -17,10 +17,11 @@ st.set_page_config(
 )
 
 # =========================================
-# CONEXIÓN EN LA NUBE OPTIMIZADA (SUPABASE)
+# CONEXIÓN EN LA NUBE OPTIMIZADA (SUPABASE IPV4 POOLER)
 # =========================================
 def conectar_db():
-    DATABASE_URL = "postgresql://postgres:Aa1082867687_@db.tqgmapwcknhdydjkbdtj.supabase.co:5432/postgres"
+    # Usamos el puerto 6543 y sslmode=require para evitar los bloqueos de IPv6 en Streamlit Cloud
+    DATABASE_URL = "postgresql://postgres:Aa1082867687_@db.tqgmapwcknhdydjkbdtj.supabase.co:6543/postgres?sslmode=require"
     return psycopg2.connect(DATABASE_URL)
 
 def inicializar_base_datos():
@@ -513,7 +514,6 @@ elif menu == "💰 Registrar Venta (POS)":
                                     cod_soporte = f"FAC-{datetime.now().strftime('%d%H%M%S')}"
                                     ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                     
-                                    # EXACtAMENTE EN ORDEN: ciudad mapeada correctamente
                                     cursor.execute("""
                                         INSERT INTO ventas_maestro (codigo_soporte, fecha_hora, cliente_nombre, cliente_id, direccion, telefono, ciudad, responsable_iva, total_facturado)
                                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -595,7 +595,6 @@ elif menu == "📊 Soporte Contable":
         st.dataframe(df_libros, use_container_width=True, hide_index=True)
         
         buffer_excel = io.BytesIO()
-        # MODIFICADO: Usamos xlsxwriter que viene por defecto en pandas para evitar dependencias caídas
         with pd.ExcelWriter(buffer_excel, engine='xlsxwriter') as writer:
             df_libros.to_excel(writer, index=False, sheet_name='Contabilidad_BriRodriguez')
         
