@@ -1,8 +1,7 @@
 import streamlit as st
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
-import psycopg2  # Conector oficial para PostgreSQL en la nube
-from psycopg2.extras import DictCursor
+from sqlalchemy import text  # Motor de conexión moderno y seguro
 import pandas as pd
 import io
 import time
@@ -17,68 +16,62 @@ st.set_page_config(
 )
 
 # =========================================
-# CONEXIÓN EN LA NUBE OPTIMIZADA (SUPABASE IPV4 POOLER)
+# CONEXIÓN EN LA NUBE MODERNA Y COMPATIBLE
 # =========================================
 def conectar_db():
-    # Usamos el puerto 6543 y sslmode=require para evitar los bloqueos de IPv6 en Streamlit Cloud
-    DATABASE_URL = "postgresql://postgres:Aa1082867687_@db.tqgmapwcknhdydjkbdtj.supabase.co:6543/postgres?sslmode=require"
-    return psycopg2.connect(DATABASE_URL)
+    # URL de conexión adaptada para SQLAlchemy (el estándar de Streamlit)
+    DATABASE_URL = "postgresql+psycopg2://postgres:Aa1082867687_@db.tqgmapwcknhdydjkbdtj.supabase.co:5432/postgres"
+    return st.connection("supabase", type="sql", url=DATABASE_URL)
 
 def inicializar_base_datos():
-    conn = None
     try:
-        conn = conectar_db()
-        cursor = conn.cursor()
-        
-        # Estructura optimizada para la nube (PostgreSQL)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS inventario (
-                id SERIAL PRIMARY KEY,
-                nombre TEXT UNIQUE,
-                categoria TEXT,
-                precio TEXT,
-                stock INTEGER,
-                costo_compra TEXT DEFAULT '0.00'
-            )
-        """)
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS ventas_maestro (
-                codigo_soporte TEXT PRIMARY KEY,
-                fecha_hora TEXT,
-                cliente_nombre TEXT,
-                cliente_id TEXT,
-                direccion TEXT,
-                telefono TEXT,
-                ciudad TEXT,
-                responsable_iva TEXT,
-                total_facturado TEXT
-            )
-        """)
-        
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS ventas_detalle (
-                id SERIAL PRIMARY KEY,
-                codigo_soporte TEXT,
-                producto TEXT,
-                categoria TEXT,
-                precio_unitario TEXT,
-                cantidad INTEGER,
-                descuento_total TEXT,
-                subtotal TEXT,
-                costo_total_historico TEXT DEFAULT '0.00'
-            )
-        """)
-        conn.commit()
-        cursor.close()
+        db = conectar_db()
+        with db.session as session:
+            # Estructura optimizada ejecutada mediante transacciones seguras
+            session.execute(text("""
+                CREATE TABLE IF NOT EXISTS inventario (
+                    id SERIAL PRIMARY KEY,
+                    nombre TEXT UNIQUE,
+                    categoria TEXT,
+                    precio TEXT,
+                    stock INTEGER,
+                    costo_compra TEXT DEFAULT '0.00'
+                )
+            """))
+            
+            session.execute(text("""
+                CREATE TABLE IF NOT EXISTS ventas_maestro (
+                    codigo_soporte TEXT PRIMARY KEY,
+                    fecha_hora TEXT,
+                    cliente_nombre TEXT,
+                    cliente_id TEXT,
+                    direccion TEXT,
+                    telefono TEXT,
+                    ciudad TEXT,
+                    responsable_iva TEXT,
+                    total_facturado TEXT
+                )
+            """))
+            
+            session.execute(text("""
+                CREATE TABLE IF NOT EXISTS ventas_detalle (
+                    id SERIAL PRIMARY KEY,
+                    codigo_soporte TEXT,
+                    producto TEXT,
+                    categoria TEXT,
+                    precio_unitario TEXT,
+                    cantidad INTEGER,
+                    descuento_total TEXT,
+                    subtotal TEXT,
+                    costo_total_historico TEXT DEFAULT '0.00'
+                )
+            """))
+            session.commit()
     except Exception as e:
-        st.error(f"⚠️ Error crítico al inicializar base de datos: {e}")
+        st.error(f"⚠️ Error al enlazar con Supabase Cloud: {e}")
         st.stop()
-    finally:
-        if conn:
-            conn.close()
 
-# Inicializamos las tablas de forma limpia
+# Inicializamos las tablas con el nuevo conector
 inicializar_base_datos()
 
 if "carrito" not in st.session_state:
@@ -91,27 +84,23 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,600;0,700;1,400&display=swap');
 
-/* FONDO GENERAL CLARO CON TEXTO OSCURO OBLIGATORIO */
 .stApp {
     background: linear-gradient(135deg, #fdf2f8, #fce7f3, #ffffff) !important;
     color: #1e293b !important;
     font-family: 'Montserrat', sans-serif !important;
 }
 
-/* FORZAR COLOR OSCURO EN TEXTOS DE STREAMLIT, LABELS Y PARÁGRAFOS */
 .stApp p, .stApp label, .stApp span, .stApp div, [data-testid="stMarkdownContainer"] p {
     color: #1e293b !important;
     font-weight: 600 !important;
 }
 
-/* TÍTULOS EN COLOR ROSADO COMPORTAMIENTO PREMIUM Y VISIBLE */
 h1, h2, h3, h4, h5, h6, [data-testid="stMarkdownContainer"] h1, [data-testid="stMarkdownContainer"] h2, [data-testid="stMarkdownContainer"] h3 { 
     font-family: 'Playfair Display', serif !important;
     color: #9d174d !important; 
     font-weight: 700 !important;
 }
 
-/* CAJAS DE INPUT, SELECCIÓN Y TEXTO (TEXTO INTERNO OSCURO, FONDO BLANCO) */
 input, select, textarea, div[data-baseweb="select"] {
     background-color: #ffffff !important;
     color: #1e293b !important;
@@ -119,12 +108,10 @@ input, select, textarea, div[data-baseweb="select"] {
     border-radius: 10px !important;
 }
 
-/* COMPORTAMIENTO INTERNO DE LAS LISTAS DESPLEGABLES */
 div[data-baseweb="select"] * {
     color: #1e293b !important;
 }
 
-/* BOTONES PREMIUM CON LETRA BLANCA DE ALTO CONTRASTE */
 div.stButton > button, div[data-testid="stForm"] button {
     background: linear-gradient(90deg, #f43f5e, #ec4899) !important;
     color: #ffffff !important;
@@ -140,7 +127,6 @@ div.stButton > button:hover {
     color: #ffffff !important;
 }
 
-/* SIDEBAR EN COLOR CONTRASTANTE */
 section[data-testid="stSidebar"] {
     background: linear-gradient(180deg, #fce7f3, #fbcfe8) !important;
     border-right: 1px solid #f472b6;
@@ -149,7 +135,6 @@ section[data-testid="stSidebar"] * {
     color: #1e293b !important;
 }
 
-/* BLOQUES DE MÉTRICAS (NÚMEROS Y TITULOS) */
 [data-testid="stMetric"] {
     background-color: #ffffff !important;
     padding: 20px;
@@ -167,7 +152,6 @@ section[data-testid="stSidebar"] * {
     font-weight: 700 !important;
 }
 
-/* TARJETAS DEL INVENTARIO */
 .card {
     background: #ffffff !important;
     padding: 22px;
@@ -215,19 +199,15 @@ if menu == "🏠 Inicio y Gráficos":
     st.subheader("Dashboard Gerencial Automatizado")
     st.markdown("---")
 
-    conn = None
     try:
-        conn = conectar_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM inventario")
-        total_productos = cursor.fetchone()[0]
+        db = conectar_db()
+        total_productos = db.query("SELECT COUNT(*) FROM inventario;").iloc[0, 0]
         
-        cursor.execute("SELECT SUM(stock) FROM inventario")
-        total_stock_fisico = cursor.fetchone()[0] or 0
+        total_stock_res = db.query("SELECT SUM(stock) FROM inventario;").iloc[0, 0]
+        total_stock_fisico = int(total_stock_res) if pd.notna(total_stock_res) else 0
         
-        cursor.execute("SELECT total_facturado FROM ventas_maestro")
-        ventas_db = cursor.fetchall()
-        total_recaudado = sum(Decimal(v[0]) for v in ventas_db)
+        ventas_df = db.query("SELECT total_facturado FROM ventas_maestro;")
+        total_recaudado = sum(Decimal(str(v)) for v in ventas_df["total_facturado"]) if not ventas_df.empty else Decimal('0.00')
         
         col1, col2, col3 = st.columns(3)
         col1.metric("📦 Modelos de Productos", total_productos)
@@ -235,14 +215,12 @@ if menu == "🏠 Inicio y Gráficos":
         col3.metric("📊 Unidades en Stock", f"{total_stock_fisico} unds")
         st.markdown("---")
 
-        df_analisis = pd.read_sql_query("""
+        df_analisis = db.query("""
             SELECT m.codigo_soporte, m.total_facturado, COUNT(d.id) as total_articulos
             FROM ventas_maestro m
             JOIN ventas_detalle d ON m.codigo_soporte = d.codigo_soporte
-            GROUP BY m.codigo_soporte
-        """, conn)
-
-        cursor.close()
+            GROUP BY m.codigo_soporte, m.total_facturado
+        """)
 
         if not df_analisis.empty:
             df_analisis["Total Facturado ($)"] = df_analisis["total_facturado"].astype(float)
@@ -278,9 +256,6 @@ if menu == "🏠 Inicio y Gráficos":
                 st.info("Aún no se registran facturas con múltiples artículos variados.")
     except Exception as e:
         st.error(f"Error de sincronización en Inicio: {e}")
-    finally:
-        if conn:
-            conn.close()
 
 # =========================================
 # 2. PANTALLA: AGREGAR PRODUCTO
@@ -308,25 +283,18 @@ elif menu == "➕ Agregar Producto":
                 precio_exacto = str(Decimal(str(precio_input)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
                 costo_exacto = str(Decimal(str(costo_input)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
                 
-                conn = None
                 with st.spinner("Sincronizando con catálogo en la nube..."):
                     try:
-                        conn = conectar_db()
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            "INSERT INTO inventario (nombre, categoria, precio, stock, costo_compra) VALUES (%s, %s, %s, %s, %s)",
-                            (nombre.strip(), categoria, precio_exacto, int(stock_input), costo_exacto)
-                        )
-                        conn.commit()
-                        cursor.close()
+                        db = conectar_db()
+                        with db.session as session:
+                            session.execute(
+                                text("INSERT INTO inventario (nombre, categoria, precio, stock, costo_compra) VALUES (:nombre, :categoria, :precio, :stock, :costo)"),
+                                {"nombre": nombre.strip(), "categoria": categoria, "precio": precio_exacto, "stock": int(stock_input), "costo": costo_exacto}
+                            )
+                            session.commit()
                         st.success(f"✔ El producto '{nombre}' se ha guardado correctamente.")
-                    except psycopg2.IntegrityError:
-                        st.error(f"❌ Ya existe un artículo registrado con el nombre '{nombre}'.")
                     except Exception as e:
-                        st.error(f"❌ Falló el envío: {e}")
-                    finally:
-                        if conn:
-                            conn.close()
+                        st.error(f"❌ Falló el envío (Verifica que el nombre no esté repetido): {e}")
 
 # =========================================
 # 3. PANTALLA: INVENTARIO
@@ -334,35 +302,29 @@ elif menu == "➕ Agregar Producto":
 elif menu == "📦 Inventario":
     st.title("📦 Almacén Físico y Control de Stock")
 
-    conn = None
     try:
-        conn = conectar_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT nombre, categoria, precio, stock, costo_compra FROM inventario ORDER BY nombre ASC")
-        productos = cursor.fetchall()
-        cursor.close()
+        db = conectar_db()
+        df_inv = db.query("SELECT nombre, categoria, precio, stock, costo_compra FROM inventario ORDER BY nombre ASC;")
 
-        if not productos:
+        if df_inv.empty:
             st.warning("El almacén está vacío.")
         else:
-            for p in productos:
-                color_stock = "#22c55e" if p[3] > 3 else "#ef4444"
-                alerta_baja = "⚠️ ¡BAJO STOCK!" if p[3] <= 3 else "✅ Abastecido"
+            for _, fila in df_inv.iterrows():
+                stock_act = int(fila["stock"])
+                color_stock = "#22c55e" if stock_act > 3 else "#ef4444"
+                alerta_baja = "⚠️ ¡BAJO STOCK!" if stock_act <= 3 else "✅ Abastecido"
                 
                 st.markdown(f'''
                 <div class="card">
                     <span style="float: right; background-color: {color_stock}; padding: 4px 10px; border-radius: 8px; font-size: 12px; font-weight: bold; color: white;">{alerta_baja}</span>
-                    <h3>{p[0]}</h3>
-                    <p>📂 <b>Línea de Producto:</b> {p[1]}</p>
-                    <p>💸 <b>Inversión (Costo):</b> ${Decimal(p[4]):,.2f} | 💰 <b>Vitrina:</b> ${Decimal(p[2]):,.2f}</p>
-                    <p>📦 <b>Disponibilidad real:</b> {p[3]} unidades</p>
+                    <h3>{fila["nombre"]}</h3>
+                    <p>📂 <b>Línea de Producto:</b> {fila["categoria"]}</p>
+                    <p>💸 <b>Inversión (Costo):</b> ${Decimal(str(fila["costo_compra"])):,.2f} | 💰 <b>Vitrina:</b> ${Decimal(str(fila["precio"])):,.2f}</p>
+                    <p>📦 <b>Disponibilidad real:</b> {stock_act} unidades</p>
                 </div>
                 ''', unsafe_allow_html=True)
     except Exception as e:
         st.error(f"Error al cargar el inventario: {e}")
-    finally:
-        if conn:
-            conn.close()
 
 # =========================================
 # 4. PANTALLA: REGISTRAR VENTA (POS)
@@ -371,22 +333,22 @@ elif menu == "💰 Registrar Venta (POS)":
     st.title("💰 Terminal de Ventas y Facturación Múltiple")
     st.markdown("---")
 
-    conn = None
     try:
-        conn = conectar_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT nombre, precio, stock, categoria, costo_compra FROM inventario WHERE stock > 0 ORDER BY nombre ASC")
-        db_productos = cursor.fetchall()
-        cursor.close()
+        db = conectar_db()
+        df_prod_venta = db.query("SELECT nombre, precio, stock, categoria, costo_compra FROM inventario WHERE stock > 0 ORDER BY nombre ASC;")
     except Exception as e:
         st.error(f"Error al consultar productos: {e}")
-        db_productos = []
-    finally:
-        if conn:
-            conn.close()
+        df_prod_venta = pd.DataFrame()
 
-    if db_productos:
-        dict_productos = {p[0]: {"precio": Decimal(p[1]), "stock": int(p[2]), "categoria": p[3], "costo": Decimal(p[4])} for p in db_productos}
+    if not df_prod_venta.empty:
+        dict_productos = {
+            fila["nombre"]: {
+                "precio": Decimal(str(fila["precio"])), 
+                "stock": int(fila["stock"]), 
+                "categoria": fila["categoria"], 
+                "costo": Decimal(str(fila["costo_compra"]))
+            } for _, fila in df_prod_venta.iterrows()
+        }
         
         col_izq, col_der = st.columns([1.1, 0.9], gap="large")
         
@@ -506,40 +468,34 @@ elif menu == "💰 Registrar Venta (POS)":
                         if c_nombre.strip() == "" or c_id.strip() == "":
                             st.error("❌ Los campos Nombre y Cédula son obligatorios.")
                         else:
-                            conn = None
                             with st.spinner("Procesando venta en la nube..."):
                                 try:
-                                    conn = conectar_db()
-                                    cursor = conn.cursor()
+                                    db = conectar_db()
                                     cod_soporte = f"FAC-{datetime.now().strftime('%d%H%M%S')}"
                                     ahora = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                     
-                                    cursor.execute("""
-                                        INSERT INTO ventas_maestro (codigo_soporte, fecha_hora, cliente_nombre, cliente_id, direccion, telefono, ciudad, responsable_iva, total_facturado)
-                                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                    """, (cod_soporte, ahora, c_nombre.strip(), c_id.strip(), c_direccion.strip(), c_telefono.strip(), c_ciudad.strip(), c_iva, str(total_factura)))
-                                    
-                                    for item in st.session_state.carrito:
-                                        cursor.execute("""
-                                            INSERT INTO ventas_detalle (codigo_soporte, producto, categoria, precio_unitario, cantidad, descuento_total, subtotal, costo_total_historico)
-                                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                                        """, (cod_soporte, item["producto"], item["categoria"], str(item["precio_unitario"]), item["cantidad"], str(item["descuento"]), str(item["subtotal"]), str(item["costo_total_historico"])))
+                                    with db.session as session:
+                                        session.execute(text("""
+                                            INSERT INTO ventas_maestro (codigo_soporte, fecha_hora, cliente_nombre, cliente_id, direccion, telefono, ciudad, responsable_iva, total_facturado)
+                                            VALUES (:cod, :fecha, :nom, :cid, :dir, :tel, :ciu, :iva, :tot)
+                                        """), {"cod": cod_soporte, "fecha": ahora, "nom": c_nombre.strip(), "cid": c_id.strip(), "dir": c_direccion.strip(), "tel": c_telefono.strip(), "ciu": c_ciudad.strip(), "iva": c_iva, "tot": str(total_factura)})
                                         
-                                        cursor.execute("UPDATE inventario SET stock = stock - %s WHERE nombre = %s", (item["cantidad"], item["producto"]))
-                                    
-                                    conn.commit()
-                                    cursor.close()
+                                        for item in st.session_state.carrito:
+                                            session.execute(text("""
+                                                INSERT INTO ventas_detalle (codigo_soporte, producto, categoria, precio_unitario, cantidad, descuento_total, subtotal, costo_total_historico)
+                                                VALUES (:cod, :prod, :cat, :pre, :cant, :desc, :sub, :costo)
+                                            """), {"cod": cod_soporte, "prod": item["producto"], "cat": item["categoria"], "pre": str(item["precio_unitario"]), "cant": item["cantidad"], "desc": str(item["descuento"]), "sub": str(item["subtotal"]), "costo": str(item["costo_total_historico"])})
+                                            
+                                            session.execute(text("UPDATE inventario SET stock = stock - :cant WHERE nombre = :prod"), {"cant": item["cantidad"], "prod": item["producto"]})
+                                        
+                                        session.commit()
+                                        
                                     time.sleep(0.4)
                                     st.success(f"🎉 ¡Factura {cod_soporte} guardada!")
                                     st.session_state.carrito = []
                                     st.rerun()
                                 except Exception as e:
-                                    if conn:
-                                        conn.rollback()
                                     st.error(f"Error crítico al registrar la venta: {e}")
-                                finally:
-                                    if conn:
-                                        conn.close()
 
 # =========================================
 # 5. PANTALLA: SOPORTE CONTABLE
@@ -548,10 +504,9 @@ elif menu == "📊 Soporte Contable":
     st.title("📊 Libro Mayor de Contabilidad e Ingresos")
     st.markdown("---")
 
-    conn = None
     try:
-        conn = conectar_db()
-        df_libros = pd.read_sql_query("""
+        db = conectar_db()
+        df_libros = db.query("""
             SELECT m.codigo_soporte AS "Nro Factura",
                    m.fecha_hora AS "Fecha",
                    m.cliente_nombre AS "Cliente",
@@ -563,14 +518,11 @@ elif menu == "📊 Soporte Contable":
                    d.costo_total_historico AS "Costo Compra Total ($)"
             FROM ventas_maestro m
             JOIN ventas_detalle d ON m.codigo_soporte = d.codigo_soporte
-            ORDER BY m.fecha_hora DESC
-        """, conn)
+            ORDER BY m.fecha_hora DESC;
+        """)
     except Exception as e:
         st.error(f"Error al conectar con el reporte contable: {e}")
         df_libros = pd.DataFrame()
-    finally:
-        if conn:
-            conn.close()
 
     if df_libros.empty:
         st.info("No se registran movimientos comerciales.")
@@ -612,33 +564,27 @@ elif menu == "⚙️ Panel Administrador":
     st.title("⚙️ Panel de Control Gerencial")
     st.markdown("---")
     
-    conn = None
     try:
-        conn = conectar_db()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, nombre, categoria, precio, stock, costo_compra FROM inventario ORDER BY nombre ASC")
-        lista_productos = cursor.fetchall()
+        db = conectar_db()
+        df_admin = db.query("SELECT id, nombre, categoria, precio, stock, costo_compra FROM inventario ORDER BY nombre ASC;")
     except Exception as e:
         st.error(f"Error de base de datos: {e}")
-        lista_productos = []
+        df_admin = pd.DataFrame()
 
-    if not lista_productos:
+    if df_admin.empty:
         st.info("No hay productos registrados.")
-        if conn:
-            conn.close()
     else:
-        nombres_productos = [p[1] for p in lista_productos]
+        nombres_productos = df_admin["nombre"].tolist()
         producto_a_modificar = st.selectbox("Selecciona el producto que deseas gestionar:", nombres_productos)
         
-        datos_actuales = next(p for p in lista_productos if p[1] == producto_a_modificar)
-        id_prod, nombre_actual, categoria_actual, precio_actual, stock_actual, costo_actual = datos_actuales
+        fila_prod = df_admin[df_admin["nombre"] == producto_a_modificar].iloc[0]
         
         with st.form("form_edicion"):
-            nuevo_nombre = st.text_input("Editar Nombre", value=nombre_actual)
-            nueva_categoria = st.selectbox("Editar Categoría", ["Collares", "Anillos", "Pulseras", "Aretes"], index=["Collares", "Anillos", "Pulseras", "Aretes"].index(categoria_actual))
-            nuevo_costo = st.number_input("Editar Costo Proveedor ($)", min_value=0.0, step=0.01, value=float(costo_actual))
-            nuevo_precio = st.number_input("Editar Precio Vitrina ($)", min_value=0.0, step=0.01, value=float(precio_actual))
-            nuevo_stock = st.number_input("Editar Stock", min_value=0, step=1, value=int(stock_actual))
+            nuevo_nombre = st.text_input("Editar Nombre", value=fila_prod["nombre"])
+            nueva_categoria = st.selectbox("Editar Categoría", ["Collares", "Anillos", "Pulseras", "Aretes"], index=["Collares", "Anillos", "Pulseras", "Aretes"].index(fila_prod["categoria"]))
+            nuevo_costo = st.number_input("Editar Costo Proveedor ($)", min_value=0.0, step=0.01, value=float(fila_prod["costo_compra"]))
+            nuevo_precio = st.number_input("Editar Precio Vitrina ($)", min_value=0.0, step=0.01, value=float(fila_prod["precio"]))
+            nuevo_stock = st.number_input("Editar Stock", min_value=0, step=1, value=int(fila_prod["stock"]))
             
             if st.form_submit_button("Aplicar Cambios Reales"):
                 precio_exacto_ed = str(Decimal(str(nuevo_precio)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
@@ -646,17 +592,14 @@ elif menu == "⚙️ Panel Administrador":
                 
                 with st.spinner("Actualizando en la nube..."):
                     try:
-                        cursor.execute(
-                            "UPDATE inventario SET nombre = %s, categoria = %s, precio = %s, stock = %s, costo_compra = %s WHERE id = %s",
-                            (nuevo_nombre.strip(), nueva_categoria, precio_exacto_ed, int(nuevo_stock), costo_exacto_ed, id_prod)
-                        )
-                        conn.commit()
-                        cursor.close()
+                        with db.session as session:
+                            session.execute(
+                                text("UPDATE inventario SET nombre = :nom, categoria = :cat, precio = :pre, stock = :stk, costo_compra = :cost WHERE id = :id"),
+                                {"nom": nuevo_nombre.strip(), "cat": nueva_categoria, "pre": precio_exacto_ed, "stk": int(nuevo_stock), "cost": costo_exacto_ed, "id": int(fila_prod["id"])}
+                            )
+                            session.commit()
                         st.success("Cambios guardados con éxito.")
                         time.sleep(0.5)
                         st.rerun()
                     except Exception as e:
                         st.error(f"No se pudieron guardar los cambios: {e}")
-                    finally:
-                        if conn:
-                            conn.close()
